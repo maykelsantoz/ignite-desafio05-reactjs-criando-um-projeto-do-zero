@@ -15,6 +15,7 @@ import Header from '../components/Header';
 
 import commonStyles from '../styles/common.module.scss';
 import styles from './home.module.scss';
+import { PreviewButton } from '../components/PreviewButton';
 
 interface Post {
   uid?: string;
@@ -34,9 +35,13 @@ interface PostPagination {
 
 interface HomeProps {
   postsPagination: PostPagination;
+  preview: boolean;
 }
 
-export default function Home({ postsPagination }: HomeProps): JSX.Element {
+export default function Home({
+  postsPagination,
+  preview,
+}: HomeProps): JSX.Element {
   const formattedPost = postsPagination.results.map(post => {
     return {
       ...post,
@@ -52,16 +57,19 @@ export default function Home({ postsPagination }: HomeProps): JSX.Element {
 
   const [posts, setPosts] = useState<Post[]>(formattedPost);
   const [nextPage, setNextPage] = useState(postsPagination.next_page);
-  // const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
 
   async function handleNextPage(): Promise<void> {
+    if (currentPage !== 1 && nextPage === null) {
+      return;
+    }
+
     const postsResults = await fetch(`${nextPage}`).then(response =>
       response.json()
     );
 
-    // console.log(postsResults);
     setNextPage(postsResults.next_page);
-    // setCurrentPage(postsResults.page);
+    setCurrentPage(postsResults.page);
 
     const newPosts = postsResults.results.map(post => {
       return {
@@ -113,26 +121,19 @@ export default function Home({ postsPagination }: HomeProps): JSX.Element {
             </Link>
           ))}
 
-          {nextPage !== null ? (
+          {nextPage && (
             <button type="button" onClick={handleNextPage}>
               Carregar mais posts
             </button>
-          ) : (
-            ''
           )}
         </div>
+        {preview && <PreviewButton />}
       </main>
     </>
   );
 }
 
-// {nextPage && (
-//   <button type="button" onClick={handleNextPage}>
-//     Carregar mais posts
-//   </button>
-// )}
-
-export const getStaticProps: GetStaticProps = async () => {
+export const getStaticProps: GetStaticProps = async ({ preview = false }) => {
   const prismic = getPrismicClient();
 
   const postsResponse = await prismic.query(
@@ -166,6 +167,6 @@ export const getStaticProps: GetStaticProps = async () => {
   // console.log(JSON.stringify(pages, null, 2));
 
   return {
-    props: { postsPagination },
+    props: { postsPagination, preview },
   };
 };
