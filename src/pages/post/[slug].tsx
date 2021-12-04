@@ -1,15 +1,15 @@
-/* eslint-disable no-return-assign */
 /* eslint-disable no-param-reassign */
+/* eslint-disable no-return-assign */
 /* eslint-disable react/no-danger */
 import { GetStaticPaths, GetStaticProps } from 'next';
-import { FiCalendar, FiUser, FiClock } from 'react-icons/fi';
-import Prismic from '@prismicio/client';
-import { RichText } from 'prismic-dom';
-import { useRouter } from 'next/router';
-
 import { format } from 'date-fns';
+import { RichText } from 'prismic-dom';
+import { FiCalendar, FiClock, FiUser } from 'react-icons/fi';
 import { ptBR } from 'date-fns/locale';
-
+import { useRouter } from 'next/router';
+import Prismic from '@prismicio/client';
+// import Cookies from 'js-cookie';
+import Link from 'next/link';
 import Head from 'next/head';
 import Header from '../../components/Header';
 
@@ -22,6 +22,7 @@ import { UtterancesComments } from '../../components/UtterancesComments';
 
 interface Post {
   first_publication_date: string | null;
+  last_publication_date: string | null;
   data: {
     title: string;
     banner: {
@@ -39,10 +40,33 @@ interface Post {
 
 interface PostProps {
   post: Post;
+  navigation: {
+    prevPost: {
+      uid: string;
+      data: {
+        title: string;
+      };
+    }[];
+    nextPost: {
+      uid: string;
+      data: {
+        title: string;
+      };
+    }[];
+  };
   preview: boolean;
 }
 
-export default function Post({ post, preview }: PostProps): JSX.Element {
+export default function Post({
+  post,
+  navigation,
+  preview,
+}: PostProps): JSX.Element {
+  const router = useRouter();
+  if (router.isFallback) {
+    return <h1>Carregando...</h1>;
+  }
+
   const totalWords = post.data.content.reduce((total, contentItem) => {
     total += contentItem.heading.split(' ').length;
 
@@ -50,14 +74,7 @@ export default function Post({ post, preview }: PostProps): JSX.Element {
     words.map(word => (total += word));
     return total;
   }, 0);
-
   const readTime = Math.ceil(totalWords / 200);
-
-  const router = useRouter();
-
-  if (router.isFallback) {
-    return <h1>Carregando...</h1>;
-  }
 
   const formatedDate = format(
     new Date(post.first_publication_date),
@@ -67,33 +84,51 @@ export default function Post({ post, preview }: PostProps): JSX.Element {
     }
   );
 
+  const isPostEdited =
+    post.first_publication_date !== post.last_publication_date;
+
+  let editionDate;
+  if (isPostEdited) {
+    editionDate = format(
+      new Date(post.last_publication_date),
+      "'* editado em' dd MMM yyyy', às' H':'m",
+      {
+        locale: ptBR,
+      }
+    );
+  }
+
   return (
     <>
       <Head>
         <title>{`Spacetraveling | ${post.data.title}`}</title>
       </Head>
       <Header />
-      <img src={post.data.banner.url} alt="banner" className={styles.banner} />
+      <img src={post.data.banner.url} alt="imagem" className={styles.banner} />
       <main className={commonStyles.container}>
-        <article className={styles.post}>
-          <h1>{post.data.title}</h1>
-          <ul>
-            <li>
-              <FiCalendar />
-              {formatedDate}
-            </li>
-            <li>
-              <FiUser />
-              {post.data.author}
-            </li>
-            <li>
-              <FiClock />
-              {`${readTime} min`}
-            </li>
-          </ul>
+        <div className={styles.post}>
+          <div className={styles.postTop}>
+            <h1>{post.data.title}</h1>
+            <ul>
+              <li>
+                <FiCalendar />
+                {formatedDate}
+              </li>
+              <li>
+                <FiUser />
+                {post.data.author}
+              </li>
+              <li>
+                <FiClock />
+                {`${readTime} min`}
+              </li>
+            </ul>
+            <span>{isPostEdited && editionDate}</span>
+          </div>
+
           {post.data.content.map(content => {
             return (
-              <div key={content.heading} className={styles.postContent}>
+              <article key={content.heading}>
                 <h2>{content.heading}</h2>
                 <div
                   className={styles.postContent}
@@ -101,17 +136,37 @@ export default function Post({ post, preview }: PostProps): JSX.Element {
                     __html: RichText.asHtml(content.body),
                   }}
                 />
-              </div>
+              </article>
             );
           })}
-        </article>
+        </div>
+
+        <section className={`${styles.navigation} ${commonStyles.container}`}>
+          {navigation?.prevPost.length > 0 && (
+            <div>
+              <h3>{navigation.prevPost[0].data.title}</h3>
+              <Link href={`/post/${navigation.prevPost[0].uid}`}>
+                <a>Post anterior</a>
+              </Link>
+            </div>
+          )}
+
+          {navigation?.nextPost.length > 0 && (
+            <div>
+              <h3>{navigation.nextPost[0].data.title}</h3>
+              <Link href={`/post/${navigation.nextPost[0].uid}`}>
+                <a>Próximo post</a>
+              </Link>
+            </div>
+          )}
+        </section>
 
         <UtterancesComments
           async
           crossOrigin="anonymous"
           issueTerm="pathname"
           label="Utterances Comments"
-          repositoryURL="https://github.com/maykelsantoz/ignite-desafio05-reactjs-criando-um-projeto-do-zero"
+          repositoryURL="maykelsantoz/ignite-desafio05-reactjs-criando-um-projeto-do-zero"
           theme="dark-blue"
         />
         {preview && <PreviewButton />}
@@ -123,7 +178,7 @@ export default function Post({ post, preview }: PostProps): JSX.Element {
 export const getStaticPaths: GetStaticPaths = async () => {
   const prismic = getPrismicClient();
   const posts = await prismic.query([
-    Prismic.predicates.at('document.type', 'posts'),
+    Prismic.Predicates.at('document.type', 'posts'),
   ]);
 
   const paths = posts.results.map(post => {
@@ -148,12 +203,31 @@ export const getStaticProps: GetStaticProps = async ({
   const prismic = getPrismicClient();
   const { slug } = params;
   const response = await prismic.getByUID('posts', String(slug), {
-    ref: previewData?.ref ?? null,
+    ref: previewData?.ref || null,
   });
+
+  const prevPost = await prismic.query(
+    [Prismic.Predicates.at('document.type', 'posts')],
+    {
+      pageSize: 1,
+      after: response.id,
+      orderings: '[document.first_publication_date]',
+    }
+  );
+
+  const nextPost = await prismic.query(
+    [Prismic.Predicates.at('document.type', 'posts')],
+    {
+      pageSize: 1,
+      after: response.id,
+      orderings: '[document.last_publication_date desc]',
+    }
+  );
 
   const post = {
     uid: response.uid,
     first_publication_date: response.first_publication_date,
+    last_publication_date: response.last_publication_date,
     data: {
       title: response.data.title,
       subtitle: response.data.subtitle,
@@ -173,7 +247,12 @@ export const getStaticProps: GetStaticProps = async ({
   return {
     props: {
       post,
+      navigation: {
+        prevPost: prevPost?.results,
+        nextPost: nextPost?.results,
+      },
       preview,
     },
+    revalidate: 1800,
   };
 };

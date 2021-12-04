@@ -99,6 +99,7 @@ export default function Home({
       <Head>
         <title>Spacetraveling | Home</title>
       </Head>
+
       <Header />
       <main className={commonStyles.container}>
         <div className={styles.posts}>
